@@ -1,6 +1,8 @@
 [Video.js - HTML5 and Flash Video Player](http://videojs.com)  [![Build Status](https://travis-ci.org/zencoder/video-js.png?branch=master)](https://travis-ci.org/zencoder/video-js)
 ==================================================
 
+# This is a test.
+
 Visit the main site at [videojs.com](http://videojs.com) for download options and instructions.
 
 ### PLEASE EXCUSE OUR DUST
