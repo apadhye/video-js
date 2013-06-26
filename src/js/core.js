@@ -2,9 +2,6 @@
  * @fileoverview Main function src.
  */
 
-goog.provide('vjs');
-goog.provide('videojs');
-
 // HTML5 Shiv. Must be in <head> to support older browsers.
 document.createElement('video');document.createElement('audio');
 
@@ -17,7 +14,7 @@ document.createElement('video');document.createElement('audio');
  * @param  {Function=} ready        Optional ready callback
  * @return {vjs.Player}             A player instance
  */
-vjs = function(id, options, ready){
+var vjs = function(id, options, ready){
   var tag; // Element of ID
 
   // Allow for element or ID to be passed in
@@ -55,6 +52,7 @@ vjs = function(id, options, ready){
 
 // Extended name, also available externally, window.videojs
 var videojs = vjs;
+window.videojs = window.vjs = vjs;
 
 // CDN Version. Used to target right flash swf.
 vjs.CDN_VERSION = 'GENERATED_CDN_VSN';
@@ -73,12 +71,11 @@ vjs.options = {
   // techOrder: ['flash','html5'],
 
   'html5': {},
-  'flash': { swf: vjs.ACCESS_PROTOCOL + 'vjs.zencdn.net/c/video-js.swf' },
+  'flash': {},
 
   // Default of web browser is 300x150. Should rely on source width/height.
   'width': 300,
   'height': 150,
-
   // defaultVolume: 0.85,
   'defaultVolume': 0.00, // The freakin seaguls are driving me crazy!
 
@@ -93,14 +90,14 @@ vjs.options = {
   }
 };
 
+// Set CDN Version of swf
+// The added (+) blocks the replace from changing this GENERATED_CDN_VSN string
+if (vjs.CDN_VERSION !== 'GENERATED'+'_CDN_VSN') {
+  videojs.options['flash']['swf'] = vjs.ACCESS_PROTOCOL + 'vjs.zencdn.net/'+vjs.CDN_VERSION+'/video-js.swf';
+}
+
 /**
  * Global player list
  * @type {Object}
  */
 vjs.players = {};
-
-
-// Set CDN Version of swf
-if (vjs.CDN_VERSION != 'GENERATED_CDN_VSN') {
-  videojs.options['flash']['swf'] = vjs.ACCESS_PROTOCOL + 'vjs.zencdn.net/'+vjs.CDN_VERSION+'/video-js.swf';
-}

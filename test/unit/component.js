@@ -1,10 +1,10 @@
-module("Component");
+module('Component');
 
 var getFakePlayer = function(){
   return {
     // Fake player requries an ID
     id: function(){ return 'player_1'; }
-  }
+  };
 };
 
 test('should create an element', function(){
@@ -16,7 +16,7 @@ test('should create an element', function(){
 test('should add a child component', function(){
   var comp = new vjs.Component(getFakePlayer());
 
-  var child = comp.addChild("component");
+  var child = comp.addChild('component');
 
   ok(comp.children().length === 1);
   ok(comp.children()[0] === child);
@@ -37,24 +37,25 @@ test('should init child coponents from options', function(){
 });
 
 test('should do a deep merge of child options', function(){
-  var compDefaultOptions = {
-    'children': {
+  // Create a default option for component
+  vjs.Component.prototype.options_ = {
+    'example': {
       'childOne': { 'foo': 'bar', 'asdf': 'fdsa' },
       'childTwo': {},
       'childThree': {}
     }
-  }
+  };
 
-  var compInitOptions = {
-    'children': {
+  var comp = new vjs.Component(getFakePlayer(), {
+    'example': {
       'childOne': { 'foo': 'baz', 'abc': '123' },
       'childThree': null,
       'childFour': {}
     }
-  }
+  });
 
-  var mergedOptions = vjs.Component.prototype.mergeOptions(compDefaultOptions, compInitOptions);
-  var children = mergedOptions['children'];
+  var mergedOptions = comp.options();
+  var children = mergedOptions['example'];
 
   ok(children['childOne']['foo'] === 'baz', 'value three levels deep overridden');
   ok(children['childOne']['asdf'] === 'fdsa', 'value three levels deep maintained');
@@ -62,13 +63,18 @@ test('should do a deep merge of child options', function(){
   ok(children['childTwo'], 'object two levels deep maintained');
   ok(children['childThree'] === null, 'object two levels deep removed');
   ok(children['childFour'], 'object two levels deep added');
+
+  ok(vjs.Component.prototype.options_['example']['childOne']['foo'] === 'bar', 'prototype options were not overridden');
+
+  // Reset default component options to none
+  vjs.Component.prototype.options_ = null;
 });
 
 test('should dispose of component and children', function(){
   var comp = new vjs.Component(getFakePlayer());
 
   // Add a child
-  var child = comp.addChild("Component");
+  var child = comp.addChild('Component');
   ok(comp.children().length === 1);
 
   // Add a listener
@@ -82,8 +88,8 @@ test('should dispose of component and children', function(){
   ok(!comp.el(), 'component element was deleted');
   ok(!child.children(), 'child children were deleted');
   ok(!child.el(), 'child element was deleted');
-  ok(!vjs.cache[id], 'listener cache nulled')
-  ok(vjs.isEmpty(data), 'original listener cache object was emptied')
+  ok(!vjs.cache[id], 'listener cache nulled');
+  ok(vjs.isEmpty(data), 'original listener cache object was emptied');
 });
 
 test('should add and remove event listeners to element', function(){
@@ -123,10 +129,10 @@ test('should trigger a listener when ready', function(){
   expect(2);
 
   var optionsReadyListener = function(){
-    ok(true, 'options listener fired')
+    ok(true, 'options listener fired');
   };
   var methodReadyListener = function(){
-    ok(true, 'ready method listener fired')
+    ok(true, 'ready method listener fired');
   };
 
   var comp = new vjs.Component(getFakePlayer(), {}, optionsReadyListener);
@@ -166,16 +172,48 @@ test('should change the width and height of a component', function(){
   fixture.appendChild(container);
   container.appendChild(el);
   // Container of el needs dimensions or the component won't have dimensions
-  container.style.width = '1000px'
-  container.style.height = '1000px'
+  container.style.width = '1000px';
+  container.style.height = '1000px';
 
   comp.width('50%');
   comp.height('123px');
 
   ok(comp.width() === 500, 'percent values working');
-  ok(vjs.getComputedStyleValue(el, 'width') === comp.width() + 'px', 'matches computed style');
+  var compStyle = vjs.getComputedDimension(el, 'width');
+  ok(compStyle === comp.width() + 'px', 'matches computed style');
   ok(comp.height() === 123, 'px values working');
 
   comp.width(321);
   ok(comp.width() === 321, 'integer values working');
+
+  comp.width('auto');
+  comp.height('auto');
+  ok(comp.width() === 1000, 'forced width was removed');
+  ok(comp.height() === 0, 'forced height was removed');
+});
+
+
+test('should use a defined content el for appending children', function(){
+  var CompWithContent = vjs.Component.extend();
+  CompWithContent.prototype.createEl = function(){
+    // Create the main componenent element
+    var el = vjs.createEl('div');
+    // Create the element where children will be appended
+    this.contentEl_ = vjs.createEl('div', { 'id': 'contentEl' });
+    el.appendChild(this.contentEl_);
+    return el;
+  };
+
+  var comp = new CompWithContent(getFakePlayer());
+  var child = comp.addChild('component');
+
+  ok(comp.children().length === 1);
+  ok(comp.el().childNodes[0]['id'] === 'contentEl');
+  ok(comp.el().childNodes[0].childNodes[0] === child.el());
+
+  comp.removeChild(child);
+
+  ok(comp.children().length === 0, 'Length should now be zero');
+  ok(comp.el().childNodes[0]['id'] === 'contentEl', 'Content El should still exist');
+  ok(comp.el().childNodes[0].childNodes[0] !== child.el(), 'Child el should be removed.');
 });

@@ -1,6 +1,4 @@
-goog.provide('vjs.dom');
-
-goog.require('vjs');
+var hasOwnProp = Object.prototype.hasOwnProperty;
 
 /**
  * Creates an element and applies properties.
@@ -12,15 +10,22 @@ vjs.createEl = function(tagName, properties){
   var el = document.createElement(tagName || 'div');
 
   for (var propName in properties){
-    if (properties.hasOwnProperty(propName)) {
-      el[propName] = properties[propName];
+    if (hasOwnProp.call(properties, propName)) {
+      //el[propName] = properties[propName];
       // Not remembering why we were checking for dash
       // but using setAttribute means you have to use getAttribute
-      // if (propName.indexOf('-') !== -1) {
-      //   el.setAttribute(propName, properties[propName]);
-      // } else {
-      //   el[propName] = properties[propName];
-      // }
+
+      // The check for dash checks for the aria-* attributes, like aria-label, aria-valuemin.
+      // The additional check for "role" is because the default method for adding attributes does not
+      // add the attribute "role". My guess is because it's not a valid attribute in some namespaces, although
+      // browsers handle the attribute just fine. The W3C allows for aria-* attributes to be used in pre-HTML5 docs.
+      // http://www.w3.org/TR/wai-aria-primer/#ariahtml. Using setAttribute gets around this problem.
+
+       if (propName.indexOf('aria-') !== -1 || propName=='role') {
+         el.setAttribute(propName, properties[propName]);
+       } else {
+         el[propName] = properties[propName];
+       }
     }
   }
   return el;
@@ -36,37 +41,110 @@ vjs.capitalize = function(string){
 };
 
 /**
+ * Object functions container
+ * @type {Object}
+ */
+vjs.obj = {};
+
+/**
+ * Object.create shim for prototypal inheritance.
+ * https://developer.mozilla.org/en-US/docs/JavaScript/Reference/Global_Objects/Object/create
+ * @param  {Object}   obj Object to use as prototype
+ */
+ vjs.obj.create = Object.create || function(obj){
+  //Create a new function called 'F' which is just an empty object.
+  function F() {}
+
+  //the prototype of the 'F' function should point to the
+  //parameter of the anonymous function.
+  F.prototype = obj;
+
+  //create a new constructor function based off of the 'F' function.
+  return new F();
+};
+
+/**
  * Loop through each property in an object and call a function
  * whose arguments are (key,value)
  * @param  {Object}   obj Object of properties
  * @param  {Function} fn  Function to be called on each property.
  * @this {*}
  */
-vjs.eachProp = function(obj, fn){
-  if (!obj) { return; }
-
-  for (var name in obj) {
-    if (obj.hasOwnProperty(name)) {
-      fn.call(this, name, obj[name]);
+vjs.obj.each = function(obj, fn, context){
+  for (var key in obj) {
+    if (hasOwnProp.call(obj, key)) {
+      fn.call(context || this, key, obj[key]);
     }
   }
 };
 
 /**
  * Merge two objects together and return the original.
- * @param  {[type]} obj1 [description]
- * @param  {[type]} obj2 [description]
- * @param  {[type]} safe [description]
- * @return {[type]}
+ * @param  {Object} obj1
+ * @param  {Object} obj2
+ * @return {Object}
  */
-vjs.merge = function(obj1, obj2){
-  // Make sure second object exists
+vjs.obj.merge = function(obj1, obj2){
   if (!obj2) { return obj1; }
-
-  for (var propName in obj2){
-    if (obj2.hasOwnProperty(propName)) { obj1[propName] = obj2[propName]; }
+  for (var key in obj2){
+    if (hasOwnProp.call(obj2, key)) {
+      obj1[key] = obj2[key];
+    }
   }
   return obj1;
+};
+
+/**
+ * Merge two objects, and merge any properties that are objects
+ * instead of just overwriting one. Uses to merge options hashes
+ * where deeper default settings are important.
+ * @param  {Object} obj1 Object to override
+ * @param  {Object} obj2 Overriding object
+ * @return {Object}      New object. Obj1 and Obj2 will be untouched.
+ */
+vjs.obj.deepMerge = function(obj1, obj2){
+  var key, val1, val2, objDef;
+  objDef = '[object Object]';
+
+  // Make a copy of obj1 so we're not ovewriting original values.
+  // like prototype.options_ and all sub options objects
+  obj1 = vjs.obj.copy(obj1);
+
+  for (key in obj2){
+    if (hasOwnProp.call(obj2, key)) {
+      val1 = obj1[key];
+      val2 = obj2[key];
+
+      // Check if both properties are pure objects and do a deep merge if so
+      if (vjs.obj.isPlain(val1) && vjs.obj.isPlain(val2)) {
+        obj1[key] = vjs.obj.deepMerge(val1, val2);
+      } else {
+        obj1[key] = obj2[key];
+      }
+    }
+  }
+  return obj1;
+};
+
+/**
+ * Make a copy of the supplied object
+ * @param  {Object} obj Object to copy
+ * @return {Object}     Copy of object
+ */
+vjs.obj.copy = function(obj){
+  return vjs.obj.merge({}, obj);
+};
+
+/**
+ * Check if an object is plain, and not a dom node or any object sub-instance
+ * @param  {Object} obj Object to check
+ * @return {Boolean}     True if plain, false otherwise
+ */
+vjs.obj.isPlain = function(obj){
+  return !!obj
+    && typeof obj === 'object'
+    && obj.toString() === '[object Object]'
+    && obj.constructor === Object;
 };
 
 /**
@@ -197,7 +275,13 @@ vjs.addClass = function(element, classToAdd){
 vjs.removeClass = function(element, classToRemove){
   if (element.className.indexOf(classToRemove) == -1) { return; }
   var classNames = element.className.split(' ');
-  classNames.splice(classNames.indexOf(classToRemove),1);
+  // IE8 Does not support array.indexOf so using a for loop
+  for (var i = classNames.length - 1; i >= 0; i--) {
+    if (classNames[i] === classToRemove) {
+      classNames.splice(i,1);
+    }
+  }
+  // classNames.splice(classNames.indexOf(classToRemove),1);
   element.className = classNames.join(' ');
 };
 
@@ -220,8 +304,8 @@ vjs.USER_AGENT = navigator.userAgent;
  * @type {Boolean}
  * @constant
  */
-vjs.IS_IPHONE = !!vjs.USER_AGENT.match(/iPad/i);
-vjs.IS_IPAD = !!vjs.USER_AGENT.match(/iPhone/i);
+vjs.IS_IPHONE = !!vjs.USER_AGENT.match(/iPhone/i);
+vjs.IS_IPAD = !!vjs.USER_AGENT.match(/iPad/i);
 vjs.IS_IPOD = !!vjs.USER_AGENT.match(/iPod/i);
 vjs.IS_IOS = vjs.IS_IPHONE || vjs.IS_IPAD || vjs.IS_IPOD;
 
@@ -290,16 +374,14 @@ vjs.getAttributeValues = function(tag){
  * @param  {String} strCssRule Style name
  * @return {String}            Style value
  */
-vjs.getComputedStyleValue = function(el, strCssRule){
+vjs.getComputedDimension = function(el, strCssRule){
   var strValue = '';
   if(document.defaultView && document.defaultView.getComputedStyle){
     strValue = document.defaultView.getComputedStyle(el, '').getPropertyValue(strCssRule);
 
   } else if(el.currentStyle){
-    strCssRule = strCssRule.replace(/\-(\w)/g, function (strMatch, p1){
-      return p1.toUpperCase();
-    });
-    strValue = el.currentStyle[strCssRule];
+    // IE8 Width/Height support
+    strValue = el['client'+strCssRule.substr(0,1).toUpperCase() + strCssRule.substr(1)] + 'px';
   }
   return strValue;
 };
@@ -461,16 +543,20 @@ vjs.get = function(url, onSuccess, onError){
 /* Local Storage
 ================================================================================ */
 vjs.setLocalStorage = function(key, value){
-  // IE was throwing errors referencing the var anywhere without this
-  var localStorage = window.localStorage || false;
-  if (!localStorage) { return; }
   try {
+    // IE was throwing errors referencing the var anywhere without this
+    var localStorage = window.localStorage || false;
+    if (!localStorage) { return; }
     localStorage[key] = value;
   } catch(e) {
     if (e.code == 22 || e.code == 1014) { // Webkit == 22 / Firefox == 1014
       vjs.log('LocalStorage Full (VideoJS)', e);
     } else {
-      vjs.log('LocalStorage Error (VideoJS)', e);
+      if (e.code == 18) {
+        vjs.log('LocalStorage not allowed (VideoJS)', e);
+      } else {
+        vjs.log('LocalStorage Error (VideoJS)', e);
+      }
     }
   }
 };
@@ -506,37 +592,33 @@ vjs.log = function(){
 
 // Offset Left
 // getBoundingClientRect technique from John Resig http://ejohn.org/blog/getboundingclientrect-is-awesome/
-if ('getBoundingClientRect' in document.documentElement) {
-  vjs.findPosX = function(el) {
-    var box;
+vjs.findPosition = function(el) {
+    var box, docEl, body, clientLeft, scrollLeft, left, clientTop, scrollTop, top;
 
-    try {
+    if (el.getBoundingClientRect && el.parentNode) {
       box = el.getBoundingClientRect();
-    } catch(e) {}
-
-    if (!box) { return 0; }
-
-    var docEl = document.documentElement,
-        body = document.body,
-        clientLeft = docEl.clientLeft || body.clientLeft || 0,
-        scrollLeft = window.pageXOffset || body.scrollLeft,
-        left = box.left + scrollLeft - clientLeft;
-
-    return left;
-  };
-} else {
-  vjs.findPosX = function(el) {
-    var curleft = el.offsetLeft;
-    // vjs.log(obj.className, obj.offsetLeft)
-    while(el = el.offsetParent) {
-      if (el.className.indexOf('video-js') == -1) {
-        // vjs.log(el.offsetParent, 'OFFSETLEFT', el.offsetLeft)
-        // vjs.log('-webkit-full-screen', el.webkitMatchesSelector('-webkit-full-screen'));
-        // vjs.log('-webkit-full-screen', el.querySelectorAll('.video-js:-webkit-full-screen'));
-      } else {
-      }
-      curleft += el.offsetLeft;
     }
-    return curleft;
-  };
-}
+
+    if (!box) {
+      return {
+        left: 0,
+        top: 0
+      };
+    }
+
+    docEl = document.documentElement;
+    body = document.body;
+
+    clientLeft = docEl.clientLeft || body.clientLeft || 0;
+    scrollLeft = window.pageXOffset || body.scrollLeft;
+    left = box.left + scrollLeft - clientLeft;
+
+    clientTop = docEl.clientTop || body.clientTop || 0;
+    scrollTop = window.pageYOffset || body.scrollTop;
+    top = box.top + scrollTop - clientTop;
+
+    return {
+      left: left,
+      top: top
+    };
+};

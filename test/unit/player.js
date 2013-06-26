@@ -1,25 +1,4 @@
-module("Player");
-
-var PlayerTest = {
-  makeTag: function(){
-    var videoTag = document.createElement('video');
-    videoTag.id = 'example_1';
-    videoTag.className = 'video-js vjs-default-skin';
-    return videoTag;
-  },
-  makePlayer: function(playerOptions){
-    var videoTag = PlayerTest.makeTag();
-
-    var fixture = document.getElementById('qunit-fixture');
-    fixture.appendChild(videoTag);
-
-    var opts = vjs.merge({
-      'techOrder': ['mediaFaker']
-    }, playerOptions);
-
-    return player = new vjs.Player(videoTag, opts);
-  }
-};
+module('Player');
 
 // Compiler doesn't like using 'this' in setup/teardown.
 // module("Player", {
@@ -73,7 +52,7 @@ test('should accept options from multiple sources and override in correct order'
   var tag0 = PlayerTest.makeTag();
   var player0 = new vjs.Player(tag0);
 
-  ok(player0.options_['attr'] === 1, 'global option was set')
+  ok(player0.options_['attr'] === 1, 'global option was set');
   player0.dispose();
 
   // Set a tag level option
@@ -98,7 +77,7 @@ test('should get tag, source, and track settings', function(){
 
   var fixture = document.getElementById('qunit-fixture');
 
-  var html = '<video id="example_1" class="video-js" autoplay preload="metadata">'
+  var html = '<video id="example_1" class="video-js" autoplay preload="metadata">';
       html += '<source src="http://google.com" type="video/mp4">';
       html += '<source src="http://google.com" type="video/webm">';
       html += '<track src="http://google.com" kind="captions" default>';
@@ -123,23 +102,22 @@ test('should get tag, source, and track settings', function(){
   ok(player.el().className.indexOf('video-js') !== -1, 'transferred class from tag to player div');
   ok(player.el().id === 'example_1', 'transferred id from tag to player div');
 
-  ok(tag['player'] === player, 'player referenceable on original tag');
   ok(vjs.players[player.id()] === player, 'player referenceable from global list');
   ok(tag.id !== player.id, 'tag ID no longer is the same as player ID');
   ok(tag.className !== player.el().className, 'tag classname updated');
 
   player.dispose();
 
-  ok(tag['player'] === null, 'tag player ref killed')
-  ok(!vjs.players['example_1'], 'global player ref killed')
-  ok(player.el() === null, 'player el killed')
+  ok(tag['player'] === null, 'tag player ref killed');
+  ok(!vjs.players['example_1'], 'global player ref killed');
+  ok(player.el() === null, 'player el killed');
 });
 
 test('should set the width and height of the player', function(){
   var player = PlayerTest.makePlayer({ width: 123, height: '100%' });
 
-  ok(player.width() === 123)
-  ok(player.el().style.width === '123px')
+  ok(player.width() === 123);
+  ok(player.el().style.width === '123px');
 
   var fixture = document.getElementById('qunit-fixture');
   var container = document.createElement('div');
@@ -148,8 +126,16 @@ test('should set the width and height of the player', function(){
   // Player container needs to have height in order to have height
   // Don't want to mess with the fixture itself
   container.appendChild(player.el());
-  container.style.height = "1000px";
+  container.style.height = '1000px';
   ok(player.height() === 1000);
+
+  player.dispose();
+});
+
+test('should not force width and height', function() {
+  var player = PlayerTest.makePlayer({ width: 'auto', height: 'auto' });
+  ok(player.el().style.width === '', 'Width is not forced');
+  ok(player.el().style.height === '', 'Height is not forced');
 
   player.dispose();
 });
@@ -165,9 +151,26 @@ test('should accept options from multiple sources and override in correct order'
   var player = new vjs.Player(tag);
   var el = player.el();
 
-  ok(el.parentNode === container, 'player placed at same level as tag')
+  ok(el.parentNode === container, 'player placed at same level as tag');
   // Tag may be placed inside the player element or it may be removed from the DOM
-  ok(tag.parentNode !== container, 'tag removed from original place')
+  ok(tag.parentNode !== container, 'tag removed from original place');
+
+  player.dispose();
+});
+
+test('should transfer the poster attribute unmodified', function(){
+  var tag, fixture, poster, player;
+  poster = 'http://example.com/poster.jpg';
+  tag = PlayerTest.makeTag();
+  tag.setAttribute('poster', poster);
+  fixture = document.getElementById('qunit-fixture');
+
+  fixture.appendChild(tag);
+  player = new vjs.Player(tag, {
+    'techOrder': ['mediaFaker']
+  });
+
+  equal(player.tech.el().poster, poster, 'the poster attribute should not be removed');
 
   player.dispose();
 });
@@ -176,38 +179,70 @@ test('should load a media controller', function(){
   var player = PlayerTest.makePlayer({
     preload: 'none',
     sources: [
-      { src: "http://google.com", type: 'video/mp4' },
-      { src: "http://google.com", type: 'video/webm' }
+      { src: 'http://google.com', type: 'video/mp4' },
+      { src: 'http://google.com', type: 'video/webm' }
     ]
   });
 
-  ok(player.el().children[0].className.indexOf('vjs-tech') !== -1, 'media controller loaded')
+  ok(player.el().children[0].className.indexOf('vjs-tech') !== -1, 'media controller loaded');
 
   player.dispose();
 });
 
-test('should not play if firstplay event prevents default', function(){
-  expect(1);
-  var player = PlayerTest.makePlayer({
-    'preload': 'none',
-    'autoplay': false,
-    'sources': [
-      { 'src': "http://google.com", 'type': 'video/mp4' },
-      { 'src': "http://google.com", 'type': 'video/webm' }
-    ]
+test('should be able to initialize player twice on the same tag using string reference', function() {
+  var videoTag = PlayerTest.makeTag();
+  var id = videoTag.id;
+
+  var fixture = document.getElementById('qunit-fixture');
+  fixture.appendChild(videoTag);
+
+  var player = vjs(videoTag.id);
+  ok(player, 'player is created');
+  player.dispose();
+
+  ok(!document.getElementById(id), 'element is removed');
+  videoTag = PlayerTest.makeTag();
+  fixture.appendChild(videoTag);
+
+  //here we receive cached version instead of real
+  player = vjs(videoTag.id);
+  //here it triggers error, because player was destroyed already after first dispose
+  player.dispose();
+});
+
+test('should set controls and trigger event', function() {
+  expect(3);
+
+  var player = PlayerTest.makePlayer({ 'controls': false });
+  ok(player.controls() === false, 'controls set through options');
+  player.controls(true);
+  ok(player.controls() === true, 'controls updated');
+
+  player.on('controlschange', function(){
+    ok(true, 'controlschange fired once');
   });
-
-  player.on('firstplay', function(e){
-    ok(true, 'firstplay triggered');
-
-    e.preventDefault();
-  });
-
-  player.on('play', function(){
-    ok(false, 'play triggered anyway')
-  });
-
-  player.play();
+  player.controls(false);
+  // Check for unnecessary controlschange events
+  player.controls(false);
 
   player.dispose();
 });
+
+// Can't figure out how to test fullscreen events with tests
+// Browsers aren't triggering the events at least
+// asyncTest('should trigger the fullscreenchange event', function() {
+//   expect(3);
+
+//   var player = PlayerTest.makePlayer();
+//   player.on('fullscreenchange', function(){
+//     ok(true, 'fullscreenchange event fired');
+//     ok(this.isFullScreen === true, 'isFullScreen is true');
+//     ok(this.el().className.indexOf('vjs-fullscreen') !== -1, 'vjs-fullscreen class added');
+
+//     player.dispose();
+//     start();
+//   });
+
+//   player.requestFullScreen();
+// });
+

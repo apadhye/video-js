@@ -3,11 +3,6 @@
  * based on the data-setup attribute of the video tag
  */
 
-goog.provide('vjs.autoSetup');
-
-goog.require('vjs.JSON');
-goog.require('vjs.events');
-
 // Automatically set up any tags that have a data-setup attribute
 vjs.autoSetup = function(){
   var options, vid, player,
@@ -63,4 +58,5 @@ vjs.one(window, 'load', function(){
 });
 
 // Run Auto-load players
-vjs.autoSetup();
+// You have to wait at least once in case this script is loaded after your video in the DOM (weird behavior only with minified version)
+vjs.autoSetupTimeout(1);

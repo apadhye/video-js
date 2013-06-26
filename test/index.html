@@ -3,6 +3,10 @@
 <head>
   <title>Video.js Test Suite</title>
 
+  <!--[if IE]>
+    <script src="https://getfirebug.com/releases/lite/1.4/firebug-lite.js"></script>
+  <!--<![endif]-->
+
   <!-- QUnit -->
   <link rel="stylesheet" href="../test/qunit/qunit/qunit.css" />
   <script src="../test/qunit/qunit/qunit.js"></script>
@@ -10,38 +14,47 @@
   <!-- Video.js CSS -->
   <link rel="stylesheet" href="../src/css/video-js.css" type="text/css">
 
-  <!-- GENERATED LIST OF SOURCE FILES -->
-  <script src="../dist/sourcelist.js"></script>
-
   <script type="text/javascript">
     (function(){
-      var root = '../';
+
       // ADD NEW TEST FILES HERE
-      var tests = [
+      window.tests = [
+        'test/unit/test-helpers.js',
+        'test/unit/core-object.js',
         'test/unit/lib.js',
         'test/unit/events.js',
         'test/unit/component.js',
         'test/unit/mediafaker.js',
         'test/unit/player.js',
         'test/unit/core.js',
-        'test/unit/media.html5.js'
+        'test/unit/media.html5.js',
+        'test/unit/controls.js',
+        'test/unit/plugins.js'
       ];
-      var compiledTests = "dist/test.video.js";
+
+      var projectRoot = '../';
       var scripts = [];
+
+      window.loadScripts = function(scripts) {
+        for (var i = 0; i < scripts.length; i++) {
+          document.write("<script src='" + projectRoot + scripts[i] + "'><\/script>" );
+        }
+      }
 
       // Choose either the raw source and tests
       // Or the compiled source + tests.
       // Use ?comiled to use the compiled tests
       if (QUnit.urlParams.min || QUnit.urlParams.compiled) {
-        scripts.push(compiledTests);
+        window.compiled = true;
       } else {
-        // sourcelist is loaded by sourcelist.js
-        // which is built by `grunt build` or `grunt watch`
-        scripts = scripts.concat(sourcelist,tests);
-      }
+        // Bunyip/Yeti starts tests after it's done loading which can
+        // lead to a double Qunit.start error which reads as
+        // "Uncaught Error: pushFailure() assertion outside test"
+        if (window.$yetify) {
+          QUnit.config.autostart = false;
+        }
 
-      for (var i = 0; i < scripts.length; i++) {
-        document.write( "<script src='" + root + scripts[i] + "'><\/script>" );
+        loadScripts(['build/source-loader.js']);
       }
 
     })()
@@ -56,5 +69,15 @@
     <ol id="qunit-tests"></ol>
     <div id="qunit-fixture"></div>
   </div>
+
+  <script>
+    // Loading tests before the end to give IE time to load vjs before tests
+    if (!window.compiled) {
+      loadScripts(window.tests);
+    } else {
+      var compiledTests = "build/files/test.minified.video.js";
+      loadScripts([compiledTests]);
+    }
+  </script>
 </body>
 </html>

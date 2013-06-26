@@ -3,42 +3,43 @@
  *
  */
 
-goog.provide('vjs.Component');
-
-goog.require('vjs.events');
-goog.require('vjs.dom');
-
 /**
  * Base UI Component class
  * @param {Object} player  Main Player
  * @param {Object=} options
  * @constructor
  */
-vjs.Component = function(player, options, ready){
-  this.player_ = player;
+vjs.Component = vjs.CoreObject.extend({
+  /** @constructor */
+  init: function(player, options, ready){
+    this.player_ = player;
 
-  // // Allow for overridding default component options
-  options = this.options_ = this.mergeOptions(this.options_, options);
+    // Make a copy of prototype.options_ to protect against overriding global defaults
+    this.options_ = vjs.obj.copy(this.options_);
 
-  // Get ID from options, element, or create using player ID and unique ID
-  this.id_ = options['id'] || ((options['el'] && options['el']['id']) ? options['el']['id'] : player.id() + '_component_' + vjs.guid++ );
+    // Updated options with supplied options
+    options = this.options(options);
 
-  this.name_ = options['name'] || null;
+    // Get ID from options, element, or create using player ID and unique ID
+    this.id_ = options['id'] || ((options['el'] && options['el']['id']) ? options['el']['id'] : player.id() + '_component_' + vjs.guid++ );
 
-  // Create element if one wasn't provided in potions
-  this.el_ = options['el'] || this.createEl();
+    this.name_ = options['name'] || null;
 
-  this.children_ = [];
-  this.childIndex_ = {};
-  this.childNameIndex_ = {};
+    // Create element if one wasn't provided in options
+    this.el_ = options['el'] || this.createEl();
 
-  // Add any child components in options
-  this.initChildren();
+    this.children_ = [];
+    this.childIndex_ = {};
+    this.childNameIndex_ = {};
 
-  this.ready(ready);
-  // Don't want to trigger ready here or it will before init is actually
-  // finished for all children that run this constructor
-};
+    // Add any child components in options
+    this.initChildren();
+
+    this.ready(ready);
+    // Don't want to trigger ready here or it will before init is actually
+    // finished for all children that run this constructor
+  }
+});
 
 /**
  * Dispose of the component and all child components.
@@ -95,20 +96,20 @@ vjs.Component.prototype.options_;
 /**
  * Deep merge of options objects
  * Whenever a property is an object on both options objects
- * the two properties will be merged using mergeOptions
+ * the two properties will be merged using vjs.obj.deepMerge.
  *
  * This is used for merging options for child components. We
  * want it to be easy to override individual options on a child
  * component without having to rewrite all the other default options.
  *
- * parentDefaultOptions = {
+ * Parent.prototype.options_ = {
  *   children: {
  *     'childOne': { 'foo': 'bar', 'asdf': 'fdsa' },
  *     'childTwo': {},
  *     'childThree': {}
  *   }
  * }
- * parentOptionsFromInit = {
+ * newOptions = {
  *   children: {
  *     'childOne': { 'foo': 'baz', 'abc': '123' }
  *     'childTwo': null,
@@ -116,7 +117,7 @@ vjs.Component.prototype.options_;
  *   }
  * }
  *
- * this.mergeOptions(parentDefaultOptions, parentOptionsFromInit);
+ * this.options(newOptions);
  *
  * RESULT
  *
@@ -129,41 +130,13 @@ vjs.Component.prototype.options_;
  *   }
  * }
  *
- *
- * @param  {Object} obj1 Object whose values will be overwritten
- * @param  {Object} obj2 Object whose values will overwrite
+ * @param  {Object} obj Object whose values will be overwritten
  * @return {Object}      NEW merged object. Does not return obj1.
  */
-vjs.Component.prototype.mergeOptions = function(obj1, obj2){
-  var retObj, toString, hasOwnProp, propName, objDef, val1, val2;
+vjs.Component.prototype.options = function(obj){
+  if (obj === undefined) return this.options_;
 
-  hasOwnProp = Object.prototype.hasOwnProperty;
-  toString = Object.prototype.toString;
-  objDef = '[object Object]';
-  obj1 = obj1 || {};
-  retObj = {};
-
-  // Make a copy of obj1 so we don't affect the original options
-  vjs.eachProp(obj1, function(name, val){
-    retObj[name] = val;
-  });
-
-  if (!obj2) { return retObj; }
-
-  for (propName in obj2){
-    if (hasOwnProp.call(obj2, propName)) {
-      val1 = retObj[propName];
-      val2 = obj2[propName];
-
-      if (toString.call(val1) === objDef && toString.call(val2) === objDef) {
-        retObj[propName] = this.mergeOptions(val1, val2);
-      } else {
-        retObj[propName] = obj2[propName];
-      }
-    }
-  }
-
-  return retObj;
+  return this.options_ = vjs.obj.deepMerge(this.options_, obj);
 };
 
 /**
@@ -189,6 +162,23 @@ vjs.Component.prototype.createEl = function(tagName, attributes){
  */
 vjs.Component.prototype.el = function(){
   return this.el_;
+};
+
+/**
+ * An optional element where, if defined, children will be inserted
+ *   instead of directly in el_
+ * @type {Element}
+ * @private
+ */
+vjs.Component.prototype.contentEl_;
+
+/**
+ * Return the component's DOM element for embedding content.
+ *   will either be el_ or a new element defined in createEl
+ * @return {Element}
+ */
+vjs.Component.prototype.contentEl = function(){
+  return this.contentEl_ || this.el_;
 };
 
 /**
@@ -318,8 +308,8 @@ vjs.Component.prototype.addChild = function(child, options){
 
   // Add the UI object's element to the container div (box)
   // Having an element is not required
-  if (typeof component.el === 'function' && component.el()) {
-    this.el_.appendChild(component.el());
+  if (typeof component['el'] === 'function' && component['el']()) {
+    this.contentEl().appendChild(component['el']());
   }
 
   // Return so it can stored on parent object if desired.
@@ -348,8 +338,8 @@ vjs.Component.prototype.removeChild = function(component){
   this.childNameIndex_[component.name] = null;
 
   var compEl = component.el();
-  if (compEl && compEl.parentNode === this.el_) {
-    this.el_.removeChild(component.el());
+  if (compEl && compEl.parentNode === this.contentEl()) {
+    this.contentEl().removeChild(component.el());
   }
 };
 
@@ -363,8 +353,7 @@ vjs.Component.prototype.initChildren = function(){
     var self = this;
 
     // Loop through components and add them to the player
-    vjs.eachProp(options['children'], function(name, opts){
-
+    vjs.obj.each(options['children'], function(name, opts){
       // Allow for disabling default components
       // e.g. vjs.options['children']['posterImage'] = false
       if (opts === false) return;
@@ -573,10 +562,7 @@ vjs.Component.prototype.fadeOut = function(){
  * @return {vjs.Component}
  */
 vjs.Component.prototype.lockShowing = function(){
-  var style = this.el_.style;
-  style.display = 'block';
-  style.opacity = 1;
-  style.visiblity = 'visible';
+  this.addClass('vjs-lock-showing');
   return this;
 };
 
@@ -585,12 +571,24 @@ vjs.Component.prototype.lockShowing = function(){
  * @return {vjs.Component}
  */
 vjs.Component.prototype.unlockShowing = function(){
-  var style = this.el_.style;
-  style.display = '';
-  style.opacity = '';
-  style.visiblity = '';
+  this.removeClass('vjs-lock-showing');
   return this;
 };
+
+/**
+ * Disable component by making it unshowable
+ */
+vjs.Component.prototype.disable = function(){
+  this.hide();
+  this.show = function(){};
+  this.fadeIn = function(){};
+};
+
+// TODO: Get enable working
+// vjs.Component.prototype.enable = function(){
+//   this.fadeIn = vjs.Component.prototype.fadeIn;
+//   this.show = vjs.Component.prototype.show;
+// };
 
 /**
  * If a value is provided it will change the width of the player to that value
@@ -648,6 +646,8 @@ vjs.Component.prototype.dimension = function(widthOrHeight, num, skipListeners){
     // Check if using css width/height (% or px) and adjust
     if ((''+num).indexOf('%') !== -1 || (''+num).indexOf('px') !== -1) {
       this.el_.style[widthOrHeight] = num;
+    } else if (num === 'auto') {
+      this.el_.style[widthOrHeight] = '';
     } else {
       this.el_.style[widthOrHeight] = num+'px';
     }
